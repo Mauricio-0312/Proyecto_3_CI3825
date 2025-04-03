@@ -146,6 +146,35 @@ void sync_dirs(const char *d1, const char *d2) {
                         cp_file_to_dir(path1, d2);
                     }
                 }
+            }else{
+                if (!S_ISDIR(st1.st_mode) && !S_ISDIR(st2.st_mode) && !same_content_file(path1, path2))  {
+                        
+                    if (difftime(st1.st_mtime, st2.st_mtime) > 0) {
+                        printf("%s fue modificado más recientemente que %s. Actualizar %s? (y/n): ", path1, path2, path2);
+                        char resp;
+                        scanf(" %c", &resp);
+                        if (resp == 'y') {
+                            if (S_ISDIR(st1.st_mode)) {
+                                rm_dir(path2);
+                                cp_dir_to_dir(path1, path2);
+                            } else {
+                                cp_file_to_dir(path1, d2);
+                            }
+                        }
+                    }else if (difftime(st1.st_mtime, st2.st_mtime) < 0) {
+                        printf("%s fue modificado más recientemente que %s. Actualizar %s? (y/n): ", path2, path1, path1);
+                        char resp;
+                        scanf(" %c", &resp);
+                        if (resp == 'y') {
+                            if (S_ISDIR(st2.st_mode)) {
+                                rm_dir(path1);
+                                cp_dir_to_dir(path2, path1);
+                            } else {
+                                cp_file_to_dir(path2, d1);
+                            }
+                        }
+                    }
+                }  
             }
         }
     }
@@ -161,6 +190,8 @@ int main(int argc, char *argv[]) {
     }
     
     sync_dirs(argv[1], argv[2]);
+    sync_dirs(argv[2], argv[1]);
+
     printf("Sincronización completada.\n");
     return EXIT_SUCCESS;
 }
