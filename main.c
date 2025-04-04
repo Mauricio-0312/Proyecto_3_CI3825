@@ -61,16 +61,6 @@ struct sync_data {
  * @param file Ruta al archivo fuente que se desea copiar.
  * @param dir Ruta al directorio destino donde se copiara el archivo.
  *
- * @details
- * - La función construye la ruta completa del archivo destino combinando el
- *   directorio destino y el nombre del archivo fuente.
- * - Se abren tanto el archivo fuente como el archivo destino, y se verifica
- *   que las operaciones sean exitosas.
- * - Los permisos del archivo destino se ajustan para que coincidan con los
- *   del archivo fuente.
- * - El contenido del archivo fuente se lee en bloques y se escribe en el
- *   archivo destino.
- *
  */
 void cp_file_to_dir(const char *file, const char *dir) {
     char dest_path[1024];
@@ -132,7 +122,7 @@ void cp_file_to_dir(const char *file, const char *dir) {
  * @param src Ruta del directorio fuente que se desea copiar.
  * @param dest Ruta del directorio destino donde se copiara el contenido.
  * @return Una estructura `dir_data` que contiene:
- *         - `file_count`: Número total de archivos copiados.
+ *         - `file_count`: Numero total de archivos copiados.
  *         - `total_size`: Tamaño total (en bytes) de los archivos copiados.
  */
 struct dir_data cp_dir_to_dir(const char *src, const char *dest) {
@@ -184,17 +174,13 @@ struct dir_data cp_dir_to_dir(const char *src, const char *dest) {
  * @brief Compara si dos archivos tienen el mismo contenido.
  *
  * Esta funcion abre dos archivos en modo binario y compara su contenido
- * para determinar si son idénticos. La comparación se realiza en bloques
- * de 4096 bytes para optimizar el rendimiento en archivos grandes.
+ * para determinar si son idénticos.
  *
  * @param file1 Ruta al primer archivo a comparar.
  * @param file2 Ruta al segundo archivo a comparar.
  * @return int Retorna 1 si los archivos tienen el mismo contenido, 
  *         de lo contrario retorna 0.
  *
- * @note La funcion utiliza `fread` para leer los archivos en bloques
- *       y `memcmp` para comparar los datos leidos. Si alguno de los
- *       archivos es vacío y el otro no, se considera que no son iguales.
  */
 int same_content_file(const char *file1, const char *file2) {
     // Abrimos los archivos
@@ -252,15 +238,12 @@ int same_content_file(const char *file1, const char *file2) {
  *
  * @param path Ruta del directorio que se desea eliminar.
  *
- * La función realiza las siguientes acciones:
+ * La funcion realiza las siguientes acciones:
  * - Abre el directorio especificado.
  * - Itera sobre cada entrada en el directorio.
  * - Si la entrada es un subdirectorio, llama recursivamente a rm_dir.
  * - Si la entrada es un archivo, lo elimina.
  * - Finalmente, elimina el directorio una vez que está vacío.
- *
- * @note Si ocurre un error al abrir el directorio, se imprime un mensaje de error
- *       utilizando perror y la función retorna sin realizar ninguna acción.
  */
 void rm_dir(const char *path) {
     // Abrimos el directorio
@@ -303,13 +286,6 @@ void rm_dir(const char *path) {
  * @param d1 Ruta del primer directorio.
  * @param d2 Ruta del segundo directorio.
  * @return struct sync_data Estructura que contiene los resultadoss sobre la sincronizacion:
- *         - `weight_from_dir1_to_dir2`: Tamaño total de los archivos copiados de d1 a d2.
- *         - `weight_from_dir2_to_dir1`: Tamaño total de los archivos copiados de d2 a d1.
- *         - `file_count_from_dir1_to_dir2`: Numero de archivos copiados de d1 a d2.
- *         - `file_count_from_dir2_to_dir1`: Numero de archivos copiados de d2 a d1.
- * 
- * @note La función asume que el usuario tiene permisos de lectura y escritura en ambos directorios.
- * @note Si un archivo es un directorio, se sincroniza recursivamente.
  */
 struct sync_data sync_dirs(const char *d1, const char *d2) {
     // Inicializamos el struct con los resultados
