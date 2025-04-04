@@ -20,10 +20,26 @@ void cp_file_to_dir(const char *file, const char *dir) {
         return;
     }
     
-    int dest_fd = open(dest_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    struct stat st;
+    if (fstat(src_fd, &st) < 0) {
+        perror("Error obteniendo información del archivo fuente");
+        close(src_fd);
+        return;
+    }
+    
+    
+    int dest_fd = open(dest_path, O_WRONLY | O_CREAT | O_TRUNC, st.st_mode & 0777);
     if (dest_fd < 0) {
         perror("Error creando archivo destino");
         close(src_fd);
+        return;
+    }
+    
+    // Cambiar los permisos del archivo destino para que coincidan con el archivo fuente
+    if (fchmod(dest_fd, st.st_mode & 0777) < 0) {
+        perror("Error cambiando permisos del archivo destino");
+        close(src_fd);
+        close(dest_fd);
         return;
     }
     
@@ -37,12 +53,21 @@ void cp_file_to_dir(const char *file, const char *dir) {
     close(dest_fd);
 }
 
+struct dir_data {
+    int file_count;
+    long long total_size;
+};
 // Función para copiar un directorio de manera recursiva a otro destino
-void cp_dir_to_dir(const char *src, const char *dest) {
+struct dir_data cp_dir_to_dir(const char *src, const char *dest) {
+    
+    struct dir_data data;
+    data.file_count = 0;
+    data.total_size = 0;
+
     DIR *dir = opendir(src);
     if (!dir) {
         perror("Error abriendo directorio");
-        return;
+        return data;
     }
     
     struct stat st;
@@ -58,12 +83,18 @@ void cp_dir_to_dir(const char *src, const char *dest) {
         
         stat(src_path, &st);
         if (S_ISDIR(st.st_mode)) {
-            cp_dir_to_dir(src_path, dest_path);
+            struct dir_data recursiveData = cp_dir_to_dir(src_path, dest_path);
+            data.file_count += recursiveData.file_count;
+            data.total_size += recursiveData.total_size;
         } else {
+            data.file_count++;
+            data.total_size += st.st_size;
             cp_file_to_dir(src_path, dest);
         }
     }
     closedir(dir);
+
+    return data;
 }
 
 // Función para comparar si dos archivos tienen el mismo contenido
@@ -158,25 +189,38 @@ void rm_dir(const char *path) {
     rmdir(path);
 }
 
+struct sync_data {
+    long long weight_from_dir1_to_dir2;
+    long long weight_from_dir2_to_dir1;
+    int file_count_from_dir1_to_dir2;
+    int file_count_from_dir2_to_dir1;
+};
+
 // Función para sincronizar dos directorios
 // Si un archivo existe en d1 pero no en d2, pregunta al usuario si desea copiarlo
-void sync_dirs(const char *d1, const char *d2) {
+struct sync_data sync_dirs(const char *d1, const char *d2) {
+    struct sync_data data;
+    data.weight_from_dir1_to_dir2 = 0;
+    data.weight_from_dir2_to_dir1 = 0;
+    data.file_count_from_dir1_to_dir2 = 0;
+    data.file_count_from_dir2_to_dir1 = 0;
+
     struct stat st;
     if (stat(d1, &st) != 0 || !S_ISDIR(st.st_mode)) {
         // fprintf(stderr, "%s no es un directorio válido.\n", d1);
-        return;
+        return data;
     }
     
     if (stat(d2, &st) != 0 || !S_ISDIR(st.st_mode)) {
         // fprintf(stderr, "%s no es un directorio válido.\n", d2);
-        return;
+        return data;
     }
 
     DIR *dir1 = opendir(d1);
     DIR *dir2 = opendir(d2);
     if (!dir1 || !dir2) {
         perror("Error abriendo directorios");
-        return;
+        return data;
     }
     
     struct dirent *entry;
@@ -184,7 +228,6 @@ void sync_dirs(const char *d1, const char *d2) {
     char path1[1024], path2[1024];
 
 
-    
     while ((entry = readdir(dir1)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
@@ -198,9 +241,17 @@ void sync_dirs(const char *d1, const char *d2) {
                 char resp;
                 scanf(" %c", &resp);
                 if (resp == 'c') {
+                    // data.weight_from_dir1_to_dir2 += st1.st_size;
+                    printf("Copiando %lld a %s, %s\n", data.weight_from_dir1_to_dir2, d2, path1);
                     if (S_ISDIR(st1.st_mode)) {
-                        cp_dir_to_dir(path1, path2);
+                        struct dir_data copied_dir_data = cp_dir_to_dir(path1, path2);
+                        data.file_count_from_dir1_to_dir2 += copied_dir_data.file_count;
+                        data.weight_from_dir1_to_dir2 += copied_dir_data.total_size;
+
                     } else {
+                        data.file_count_from_dir1_to_dir2++;
+                        data.weight_from_dir1_to_dir2 += st1.st_size;
+
                         cp_file_to_dir(path1, d2);
                     }
                 } else if (resp == 'e') {
@@ -218,23 +269,15 @@ void sync_dirs(const char *d1, const char *d2) {
                         char resp;
                         scanf(" %c", &resp);
                         if (resp == 'y') {
-                            
-                            cp_file_to_dir(path1, d2);
-                        }else if (resp == 'n') {
-                            
-                            cp_file_to_dir(path2, d1);
 
-                        }
-                    }else if (difftime(st1.st_mtime, st2.st_mtime) < 0) {
-                        printf("%s fue modificado más recientemente que %s. Actualizar %s? (y/n): ", path2, path1, path1);
-                        char resp;
-                        scanf(" %c", &resp);
-                        if (resp == 'y') {
-                            
-                            cp_file_to_dir(path2, d1);
+                            data.weight_from_dir1_to_dir2 += st1.st_size;
+                            data.file_count_from_dir1_to_dir2++;
+                            cp_file_to_dir(path1, d2);
                         }else if (resp == 'n') {
                             
-                            cp_file_to_dir(path1, d2);
+                            data.weight_from_dir2_to_dir1 += st2.st_size;
+                            data.file_count_from_dir2_to_dir1++;
+                            cp_file_to_dir(path2, d1);
 
                         }
                     }
@@ -242,11 +285,16 @@ void sync_dirs(const char *d1, const char *d2) {
             }
         }
 
-        sync_dirs(path1, path2);
+        struct sync_data recursive_data = sync_dirs(path1, path2);
+        data.weight_from_dir1_to_dir2 += recursive_data.weight_from_dir1_to_dir2;
+        data.weight_from_dir2_to_dir1 += recursive_data.weight_from_dir2_to_dir1;
+        data.file_count_from_dir1_to_dir2 += recursive_data.file_count_from_dir1_to_dir2;
+        data.file_count_from_dir2_to_dir1 += recursive_data.file_count_from_dir2_to_dir1;
     }
 
     closedir(dir1);
     closedir(dir2);
+    return data;
 }
 
 // Función principal que recibe dos directorios como argumentos y sincroniza su contenido
@@ -256,9 +304,16 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
     
-    sync_dirs(argv[1], argv[2]);
-    sync_dirs(argv[2], argv[1]);
+    struct sync_data data_first_call = sync_dirs(argv[1], argv[2]);
+    struct sync_data data_second_call = sync_dirs(argv[2], argv[1]);
 
-    printf("Sincronización completada.\n");
+    long long weight_from_dir1_to_dir2 = data_first_call.weight_from_dir1_to_dir2 + data_second_call.weight_from_dir2_to_dir1;
+    long long weight_from_dir2_to_dir1 = data_first_call.weight_from_dir2_to_dir1 + data_second_call.weight_from_dir1_to_dir2;
+    int file_count_from_dir1_to_dir2 = data_first_call.file_count_from_dir1_to_dir2 + data_second_call.file_count_from_dir2_to_dir1;
+    int file_count_from_dir2_to_dir1 = data_first_call.file_count_from_dir2_to_dir1 + data_second_call.file_count_from_dir1_to_dir2;
+
+    printf("Sincronización completada. \n");
+    printf("Se transfirieron %lld kb y %d archivos desde el primer directorio hacia el segundo directorio\n ", weight_from_dir1_to_dir2/1024, file_count_from_dir1_to_dir2);
+    printf("Se transfirieron %lld kb y %d archivos desde el segundo directorio hacia el primer directorio\n ", weight_from_dir2_to_dir1/1024, file_count_from_dir2_to_dir1);
     return EXIT_SUCCESS;
 }
