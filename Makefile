@@ -11,16 +11,10 @@ CC=gcc
 CFLAGS=-Wall -Wextra -Wdouble-promotion -Wno-unused-parameter -Wno-unused-function -Wno-sign-conversion -Werror -fsanitize=undefined -std=gnu2x -O0 -ggdb
 
 ###############
-# Librerías #
-###############
-
-# LIBS=-lpthread
-
-###############
 # Compilación #
 ###############
 
-PROG=sync_dirs
+PROG=syncDir
 
 ALL: $(PROG)
 
