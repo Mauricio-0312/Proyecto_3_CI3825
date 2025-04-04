@@ -8,18 +8,82 @@
 #include <utime.h>
 #include <time.h>
 
-// Función para copiar un archivo a un directorio
-// Toma la ruta de un archivo y un directorio de destino y copia el archivo allí
+
+/**
+ * @struct dir_data
+ * @brief Estructura para almacenar informacion sobre un directorio.
+ *
+ * Esta estructura contiene datos relacionados con un directorio, 
+ * incluyendo el numero de archivos y el tamaño total de los mismos.
+ *
+ * - file_count: Numero total de archivos en el directorio.
+ *
+ * - total_size: Tamaño total de los archivos en el directorio, en bytes.
+ */
+struct dir_data {
+    int file_count;
+    long long total_size;
+};
+
+/**
+ * @struct sync_data
+ * 
+ * @brief Esta estructura se utiliza para almacenar información relacionada con la sincronización
+ * de datos entre dos directorios.
+ * 
+ * - weight_from_dir1_to_dir2: Peso total (en bytes) de los archivos transferidos desde 
+ *   el directorio 1 al directorio 2.
+ *
+ * - weight_from_dir2_to_dir1: Peso total (en bytes) de los archivos transferidos desde 
+ *   el directorio 2 al directorio 1.
+ *
+ * - file_count_from_dir1_to_dir2: Cantidad de archivos transferidos desde el directorio 1 
+ *   al directorio 2.
+ *
+ * - file_count_from_dir2_to_dir1: Cantidad de archivos transferidos desde el directorio 2 
+ *   al directorio 1.
+ */
+struct sync_data {
+    long long weight_from_dir1_to_dir2;
+    long long weight_from_dir2_to_dir1;
+    int file_count_from_dir1_to_dir2;
+    int file_count_from_dir2_to_dir1;
+};
+
+
+/**
+ * @brief Copia un archivo a un directorio especificado.
+ *
+ * Esta funcion toma un archivo fuente y lo copia a un directorio destino,
+ * preservando los permisos del archivo original. Si ocurre algún error durante
+ * el proceso, se imprime un mensaje de error en la salida estandar de error.
+ *
+ * @param file Ruta al archivo fuente que se desea copiar.
+ * @param dir Ruta al directorio destino donde se copiara el archivo.
+ *
+ * @details
+ * - La función construye la ruta completa del archivo destino combinando el
+ *   directorio destino y el nombre del archivo fuente.
+ * - Se abren tanto el archivo fuente como el archivo destino, y se verifica
+ *   que las operaciones sean exitosas.
+ * - Los permisos del archivo destino se ajustan para que coincidan con los
+ *   del archivo fuente.
+ * - El contenido del archivo fuente se lee en bloques y se escribe en el
+ *   archivo destino.
+ *
+ */
 void cp_file_to_dir(const char *file, const char *dir) {
     char dest_path[1024];
     snprintf(dest_path, sizeof(dest_path), "%s/%s", dir, strrchr(file, '/') + 1);
     
+    // Abrimos el archivo fuente
     int src_fd = open(file, O_RDONLY);
     if (src_fd < 0) {
         perror("Error abriendo archivo fuente");
         return;
     }
     
+    // Obtenemos las caracteristicas del archivo fuente
     struct stat st;
     if (fstat(src_fd, &st) < 0) {
         perror("Error obteniendo información del archivo fuente");
@@ -27,7 +91,7 @@ void cp_file_to_dir(const char *file, const char *dir) {
         return;
     }
     
-    
+    // Creamos el archivo
     int dest_fd = open(dest_path, O_WRONLY | O_CREAT | O_TRUNC, st.st_mode & 0777);
     if (dest_fd < 0) {
         perror("Error creando archivo destino");
@@ -35,7 +99,7 @@ void cp_file_to_dir(const char *file, const char *dir) {
         return;
     }
     
-    // Cambiar los permisos del archivo destino para que coincidan con el archivo fuente
+    // Cambiarmos los permisos del archivo destino para que coincidan con el archivo fuente
     if (fchmod(dest_fd, st.st_mode & 0777) < 0) {
         perror("Error cambiando permisos del archivo destino");
         close(src_fd);
@@ -43,33 +107,49 @@ void cp_file_to_dir(const char *file, const char *dir) {
         return;
     }
     
+    // Declaramos un buffer para realizar la copia por bloques
     char buffer[4096];
     ssize_t bytes;
     while ((bytes = read(src_fd, buffer, sizeof(buffer))) > 0) {
         write(dest_fd, buffer, bytes);
     }
     
+    // Cerramos los archivos
     close(src_fd);
     close(dest_fd);
 }
 
-struct dir_data {
-    int file_count;
-    long long total_size;
-};
-// Función para copiar un directorio de manera recursiva a otro destino
+
+/**
+ * @brief Copia un directorio de manera recursiva a otro destino.
+ *
+ * Esta funcion toma un directorio fuente y copia su contenido, incluyendo
+ * subdirectorios y archivos, a un directorio de destino. Si el directorio
+ * de destino no existe, se crea automaticamente. Ademas, se recopilan
+ * estadisticas sobre la cantidad de archivos copiados y el tamaño total
+ * de los datos transferidos.
+ *
+ * @param src Ruta del directorio fuente que se desea copiar.
+ * @param dest Ruta del directorio destino donde se copiara el contenido.
+ * @return Una estructura `dir_data` que contiene:
+ *         - `file_count`: Número total de archivos copiados.
+ *         - `total_size`: Tamaño total (en bytes) de los archivos copiados.
+ */
 struct dir_data cp_dir_to_dir(const char *src, const char *dest) {
     
+    // Inicializamos la data
     struct dir_data data;
     data.file_count = 0;
     data.total_size = 0;
 
+    // Abrimos el directorio
     DIR *dir = opendir(src);
     if (!dir) {
         perror("Error abriendo directorio");
         return data;
     }
     
+    // Creamos el nuevo directorio
     struct stat st;
     mkdir(dest, 0755);
     
@@ -81,6 +161,7 @@ struct dir_data cp_dir_to_dir(const char *src, const char *dest) {
         snprintf(src_path, sizeof(src_path), "%s/%s", src, entry->d_name);
         snprintf(dest_path, sizeof(dest_path), "%s/%s", dest, entry->d_name);
         
+        // Chequeamos si es un archivo o un directorio
         stat(src_path, &st);
         if (S_ISDIR(st.st_mode)) {
             struct dir_data recursiveData = cp_dir_to_dir(src_path, dest_path);
@@ -92,13 +173,31 @@ struct dir_data cp_dir_to_dir(const char *src, const char *dest) {
             cp_file_to_dir(src_path, dest);
         }
     }
+
+    // Cerramos el directorio
     closedir(dir);
 
     return data;
 }
 
-// Función para comparar si dos archivos tienen el mismo contenido
+/**
+ * @brief Compara si dos archivos tienen el mismo contenido.
+ *
+ * Esta funcion abre dos archivos en modo binario y compara su contenido
+ * para determinar si son idénticos. La comparación se realiza en bloques
+ * de 4096 bytes para optimizar el rendimiento en archivos grandes.
+ *
+ * @param file1 Ruta al primer archivo a comparar.
+ * @param file2 Ruta al segundo archivo a comparar.
+ * @return int Retorna 1 si los archivos tienen el mismo contenido, 
+ *         de lo contrario retorna 0.
+ *
+ * @note La funcion utiliza `fread` para leer los archivos en bloques
+ *       y `memcmp` para comparar los datos leidos. Si alguno de los
+ *       archivos es vacío y el otro no, se considera que no son iguales.
+ */
 int same_content_file(const char *file1, const char *file2) {
+    // Abrimos los archivos
     FILE *f1 = fopen(file1, "rb");
     FILE *f2 = fopen(file2, "rb");
 
@@ -113,6 +212,7 @@ int same_content_file(const char *file1, const char *file2) {
  
     r1 = fread(buf1, 1, sizeof(buf1), f1);
     r2 = fread(buf2, 1, sizeof(buf2), f2);
+    // Chequeamos si alguno de los archivos es vacio
     if((r1 == 0 && r2 != 0) || (r1 != 0 && r2 == 0)) {
         result = 0;
         fclose(f1);
@@ -136,15 +236,34 @@ int same_content_file(const char *file1, const char *file2) {
         r1 = fread(buf1, 1, sizeof(buf1), f1);
         r2 = fread(buf2, 1, sizeof(buf2), f2);
     }
-    
+
+    // Cerramos los archivos
     fclose(f1);
     fclose(f2);
 
     return result;
 }
 
-// Función para eliminar un directorio y su contenido de manera recursiva
+/**
+ * @brief Elimina un directorio y todo su contenido de manera recursiva.
+ *
+ * Esta funcion elimina todos los archivos y subdirectorios dentro del directorio
+ * especificado, y luego elimina el directorio en sí. 
+ *
+ * @param path Ruta del directorio que se desea eliminar.
+ *
+ * La función realiza las siguientes acciones:
+ * - Abre el directorio especificado.
+ * - Itera sobre cada entrada en el directorio.
+ * - Si la entrada es un subdirectorio, llama recursivamente a rm_dir.
+ * - Si la entrada es un archivo, lo elimina.
+ * - Finalmente, elimina el directorio una vez que está vacío.
+ *
+ * @note Si ocurre un error al abrir el directorio, se imprime un mensaje de error
+ *       utilizando perror y la función retorna sin realizar ninguna acción.
+ */
 void rm_dir(const char *path) {
+    // Abrimos el directorio
     DIR *dir = opendir(path);
     if (!dir) {
         perror("Error abriendo directorio para eliminación");
@@ -154,26 +273,22 @@ void rm_dir(const char *path) {
     struct dirent *entry;
     char file_path[1024];
     struct stat st;
+    
     while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
         snprintf(file_path, sizeof(file_path), "%s/%s", path, entry->d_name);
         stat(file_path, &st);
+        // Verificamos si es un directorio o un archivo
         if (S_ISDIR(st.st_mode)) {
             rm_dir(file_path);
         } else {
             remove(file_path);
         }
     }
+    // Cerramos el directorio y lo borramos
     closedir(dir);
     rmdir(path);
 }
-
-struct sync_data {
-    long long weight_from_dir1_to_dir2;
-    long long weight_from_dir2_to_dir1;
-    int file_count_from_dir1_to_dir2;
-    int file_count_from_dir2_to_dir1;
-};
 
 // Función para sincronizar dos directorios
 // Si un archivo existe en d1 pero no en d2, pregunta al usuario si desea copiarlo
@@ -186,12 +301,10 @@ struct sync_data sync_dirs(const char *d1, const char *d2) {
 
     struct stat st;
     if (stat(d1, &st) != 0 || !S_ISDIR(st.st_mode)) {
-        // fprintf(stderr, "%s no es un directorio válido.\n", d1);
         return data;
     }
     
     if (stat(d2, &st) != 0 || !S_ISDIR(st.st_mode)) {
-        // fprintf(stderr, "%s no es un directorio válido.\n", d2);
         return data;
     }
 
