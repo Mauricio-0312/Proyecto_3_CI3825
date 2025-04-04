@@ -80,24 +80,51 @@ int same_content_file(const char *file1, const char *file2) {
     
     int result = 1;
     char buf1[4096], buf2[4096];
-    size_t r1, r2, r3, r4;
-    r3 = fread(buf1, 1, sizeof(buf1), f1);
-    r4 = fread(buf2, 1, sizeof(buf2), f2);
+    // char buf3[4096], buf4[4096];
+    size_t r1, r2;
+    // r3 = fread(buf3, 1, sizeof(buf3), f1);
+    // r4 = fread(buf4, 1, sizeof(buf4), f2);
 
-    if (r3 != r4) {
+    // printf("%ld %ld %s %s \n", r3, r4, file1, file2);
+    // if (r3 != r4) {
+    //     result = 0;
+    // }
+    r1 = fread(buf1, 1, sizeof(buf1), f1);
+    r2 = fread(buf2, 1, sizeof(buf2), f2);
+    if((r1 == 0 && r2 != 0) || (r1 != 0 && r2 == 0)) {
         result = 0;
+        fclose(f1);
+        fclose(f2);
+        return result;
     }
 
-    while ((r1 = fread(buf1, 1, sizeof(buf1), f1)) > 0 && 
-    (r2 = fread(buf2, 1, sizeof(buf2), f2)) > 0) {
+    if (r1 != r2 || memcmp(buf1, buf2, r1) != 0) {
+        result = 0;
+        fclose(f1);
+        fclose(f2);
+        return result;
+    }
+
+    while (r1 > 0 && r2 > 0) {
         if (r1 != r2 || memcmp(buf1, buf2, r1) != 0) {
             result = 0;
             break;
         }
+
+        r1 = fread(buf1, 1, sizeof(buf1), f1);
+        r2 = fread(buf2, 1, sizeof(buf2), f2);
     }
+
+    // while ((r1 = fread(buf1, 1, sizeof(buf1), f1)) > 0 && 
+    // (r2 = fread(buf2, 1, sizeof(buf2), f2)) > 0) {
+    //     printf("%ld %ld \n", r1, r2);
+    //     if (r1 != r2 || memcmp(buf1, buf2, r1) != 0) {
+    //         result = 0;
+    //         break;
+    //     }
+    // }
     
     // printf("Comparando 2 %s y %s\n", file1, file2);
-    // printf("%ld %ld \n", r1, r2);
     
     fclose(f1);
     fclose(f2);
@@ -167,42 +194,48 @@ void sync_dirs(const char *d1, const char *d2) {
         
         if (stat(path1, &st1) == 0) {
             if (stat(path2, &st2) != 0) {
-                printf("%s no existe en %s. Copiarlo? (y/n): ", entry->d_name, d2);
+                printf("%s no existe en %s. Desea copiarlo al directorio que no lo contiene o eliminarlo? (c/e): ", entry->d_name, d2);
                 char resp;
                 scanf(" %c", &resp);
-                if (resp == 'y') {
+                if (resp == 'c') {
                     if (S_ISDIR(st1.st_mode)) {
                         cp_dir_to_dir(path1, path2);
                     } else {
                         cp_file_to_dir(path1, d2);
                     }
+                } else if (resp == 'e') {
+                    if (S_ISDIR(st1.st_mode)) {
+                        rm_dir(path1);
+                    } else {
+                        remove(path1);
+                    }
                 }
             }else{
                 if (!S_ISDIR(st1.st_mode) && !S_ISDIR(st2.st_mode) && !same_content_file(path1, path2))  {
-                    printf("Hola");
+                    
                     if (difftime(st1.st_mtime, st2.st_mtime) > 0) {
                         printf("%s fue modificado más recientemente que %s. Actualizar %s? (y/n): ", path1, path2, path2);
                         char resp;
                         scanf(" %c", &resp);
                         if (resp == 'y') {
-                            if (S_ISDIR(st1.st_mode)) {
-                                rm_dir(path2);
-                                cp_dir_to_dir(path1, path2);
-                            } else {
-                                cp_file_to_dir(path1, d2);
-                            }
+                            
+                            cp_file_to_dir(path1, d2);
+                        }else if (resp == 'n') {
+                            
+                            cp_file_to_dir(path2, d1);
+
                         }
                     }else if (difftime(st1.st_mtime, st2.st_mtime) < 0) {
                         printf("%s fue modificado más recientemente que %s. Actualizar %s? (y/n): ", path2, path1, path1);
                         char resp;
                         scanf(" %c", &resp);
                         if (resp == 'y') {
-                            if (S_ISDIR(st2.st_mode)) {
-                                rm_dir(path1);
-                                cp_dir_to_dir(path2, path1);
-                            } else {
-                                cp_file_to_dir(path2, d1);
-                            }
+                            
+                            cp_file_to_dir(path2, d1);
+                        }else if (resp == 'n') {
+                            
+                            cp_file_to_dir(path1, d2);
+
                         }
                     }
                 }  
