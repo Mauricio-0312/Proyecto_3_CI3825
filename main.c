@@ -70,24 +70,39 @@ void cp_dir_to_dir(const char *src, const char *dest) {
 int same_content_file(const char *file1, const char *file2) {
     FILE *f1 = fopen(file1, "rb");
     FILE *f2 = fopen(file2, "rb");
+    // printf("Comparando %s y %s\n", file1, file2);
     if (!f1 || !f2) {
         perror("Error abriendo archivos para comparación");
         return 0;
     }
+
+    // printf("Abriendo %s y %s\n", file1, file2);
     
     int result = 1;
     char buf1[4096], buf2[4096];
-    size_t r1, r2;
+    size_t r1, r2, r3, r4;
+    r3 = fread(buf1, 1, sizeof(buf1), f1);
+    r4 = fread(buf2, 1, sizeof(buf2), f2);
+
+    if (r3 != r4) {
+        result = 0;
+    }
+
     while ((r1 = fread(buf1, 1, sizeof(buf1), f1)) > 0 && 
-           (r2 = fread(buf2, 1, sizeof(buf2), f2)) > 0) {
+    (r2 = fread(buf2, 1, sizeof(buf2), f2)) > 0) {
         if (r1 != r2 || memcmp(buf1, buf2, r1) != 0) {
             result = 0;
             break;
         }
     }
     
+    // printf("Comparando 2 %s y %s\n", file1, file2);
+    // printf("%ld %ld \n", r1, r2);
+    
     fclose(f1);
     fclose(f2);
+
+    // printf("%d \n", result);
     return result;
 }
 
@@ -119,6 +134,17 @@ void rm_dir(const char *path) {
 // Función para sincronizar dos directorios
 // Si un archivo existe en d1 pero no en d2, pregunta al usuario si desea copiarlo
 void sync_dirs(const char *d1, const char *d2) {
+    struct stat st;
+    if (stat(d1, &st) != 0 || !S_ISDIR(st.st_mode)) {
+        // fprintf(stderr, "%s no es un directorio válido.\n", d1);
+        return;
+    }
+    
+    if (stat(d2, &st) != 0 || !S_ISDIR(st.st_mode)) {
+        // fprintf(stderr, "%s no es un directorio válido.\n", d2);
+        return;
+    }
+
     DIR *dir1 = opendir(d1);
     DIR *dir2 = opendir(d2);
     if (!dir1 || !dir2) {
@@ -129,8 +155,13 @@ void sync_dirs(const char *d1, const char *d2) {
     struct dirent *entry;
     struct stat st1, st2;
     char path1[1024], path2[1024];
+
+
     
     while ((entry = readdir(dir1)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
         snprintf(path1, sizeof(path1), "%s/%s", d1, entry->d_name);
         snprintf(path2, sizeof(path2), "%s/%s", d2, entry->d_name);
         
@@ -148,7 +179,7 @@ void sync_dirs(const char *d1, const char *d2) {
                 }
             }else{
                 if (!S_ISDIR(st1.st_mode) && !S_ISDIR(st2.st_mode) && !same_content_file(path1, path2))  {
-                        
+                    printf("Hola");
                     if (difftime(st1.st_mtime, st2.st_mtime) > 0) {
                         printf("%s fue modificado más recientemente que %s. Actualizar %s? (y/n): ", path1, path2, path2);
                         char resp;
@@ -177,7 +208,10 @@ void sync_dirs(const char *d1, const char *d2) {
                 }  
             }
         }
+
+        sync_dirs(path1, path2);
     }
+
     closedir(dir1);
     closedir(dir2);
 }
