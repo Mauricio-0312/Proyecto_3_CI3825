@@ -273,7 +273,7 @@ void rm_dir(const char *path) {
     struct dirent *entry;
     char file_path[1024];
     struct stat st;
-    
+
     while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
         snprintf(file_path, sizeof(file_path), "%s/%s", path, entry->d_name);
@@ -290,9 +290,29 @@ void rm_dir(const char *path) {
     rmdir(path);
 }
 
-// Función para sincronizar dos directorios
-// Si un archivo existe en d1 pero no en d2, pregunta al usuario si desea copiarlo
+/**
+ * @brief Sincroniza dos directorios, copiando o eliminando archivos según las decisiones del usuario.
+ * 
+ * Esta funcion compara los contenidos de dos directorios y realiza las siguientes acciones:
+ * - Si un archivo existe en el primer directorio (d1) pero no en el segundo (d2), 
+ *   pregunta al usuario si desea copiarlo al segundo directorio o eliminarlo del primero.
+ * - Si un archivo existe en ambos directorios pero su contenido es diferente, 
+ *   pregunta al usuario si desea actualizar el archivo mas antiguo con el mas reciente.
+ * - Si un archivo es un directorio, la funcion se llama recursivamente para sincronizar su contenido.
+ * 
+ * @param d1 Ruta del primer directorio.
+ * @param d2 Ruta del segundo directorio.
+ * @return struct sync_data Estructura que contiene los resultadoss sobre la sincronizacion:
+ *         - `weight_from_dir1_to_dir2`: Tamaño total de los archivos copiados de d1 a d2.
+ *         - `weight_from_dir2_to_dir1`: Tamaño total de los archivos copiados de d2 a d1.
+ *         - `file_count_from_dir1_to_dir2`: Numero de archivos copiados de d1 a d2.
+ *         - `file_count_from_dir2_to_dir1`: Numero de archivos copiados de d2 a d1.
+ * 
+ * @note La función asume que el usuario tiene permisos de lectura y escritura en ambos directorios.
+ * @note Si un archivo es un directorio, se sincroniza recursivamente.
+ */
 struct sync_data sync_dirs(const char *d1, const char *d2) {
+    // Inicializamos el struct con los resultados
     struct sync_data data;
     data.weight_from_dir1_to_dir2 = 0;
     data.weight_from_dir2_to_dir1 = 0;
@@ -308,6 +328,7 @@ struct sync_data sync_dirs(const char *d1, const char *d2) {
         return data;
     }
 
+    // Abrimos los directorios
     DIR *dir1 = opendir(d1);
     DIR *dir2 = opendir(d2);
     if (!dir1 || !dir2) {
@@ -319,7 +340,7 @@ struct sync_data sync_dirs(const char *d1, const char *d2) {
     struct stat st1, st2;
     char path1[1024], path2[1024];
 
-
+    // Iteramos sobre el directorio1
     while ((entry = readdir(dir1)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
@@ -327,14 +348,18 @@ struct sync_data sync_dirs(const char *d1, const char *d2) {
         snprintf(path1, sizeof(path1), "%s/%s", d1, entry->d_name);
         snprintf(path2, sizeof(path2), "%s/%s", d2, entry->d_name);
         
+        // Verificamos que el archivo que esta en dir1 este en dir2
         if (stat(path1, &st1) == 0) {
             if (stat(path2, &st2) != 0) {
                 printf("%s no existe en %s. Desea copiarlo al directorio que no lo contiene o eliminarlo? (c/e): ", entry->d_name, d2);
                 char resp;
                 scanf(" %c", &resp);
+                // Si la respuesta es 'c' copiamos el archivo
                 if (resp == 'c') {
-                    // data.weight_from_dir1_to_dir2 += st1.st_size;
+                    
                     printf("Copiando %lld a %s, %s\n", data.weight_from_dir1_to_dir2, d2, path1);
+
+                    // Verificamos si es un archivo o un directorio
                     if (S_ISDIR(st1.st_mode)) {
                         struct dir_data copied_dir_data = cp_dir_to_dir(path1, path2);
                         data.file_count_from_dir1_to_dir2 += copied_dir_data.file_count;
@@ -346,6 +371,7 @@ struct sync_data sync_dirs(const char *d1, const char *d2) {
 
                         cp_file_to_dir(path1, d2);
                     }
+                // Si la respuesta es 'e' eliminamos el archivo
                 } else if (resp == 'e') {
                     if (S_ISDIR(st1.st_mode)) {
                         rm_dir(path1);
@@ -354,6 +380,8 @@ struct sync_data sync_dirs(const char *d1, const char *d2) {
                     }
                 }
             }else{
+                // Hacemos la verificacion de la fecha de modificacion entre dos archivos de mismo
+                // nombre y tamaño
                 if (!S_ISDIR(st1.st_mode) && !S_ISDIR(st2.st_mode) && !same_content_file(path1, path2))  {
                     
                     if (difftime(st1.st_mtime, st2.st_mtime) > 0) {
@@ -377,6 +405,7 @@ struct sync_data sync_dirs(const char *d1, const char *d2) {
             }
         }
 
+        // Sumamos los datos de la sincronizacion recursiva
         struct sync_data recursive_data = sync_dirs(path1, path2);
         data.weight_from_dir1_to_dir2 += recursive_data.weight_from_dir1_to_dir2;
         data.weight_from_dir2_to_dir1 += recursive_data.weight_from_dir2_to_dir1;
@@ -384,6 +413,7 @@ struct sync_data sync_dirs(const char *d1, const char *d2) {
         data.file_count_from_dir2_to_dir1 += recursive_data.file_count_from_dir2_to_dir1;
     }
 
+    // Cerramos los archivos
     closedir(dir1);
     closedir(dir2);
     return data;
@@ -396,14 +426,17 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
     
+    // Hacemos la sincronizacion de manera bidireccional
     struct sync_data data_first_call = sync_dirs(argv[1], argv[2]);
     struct sync_data data_second_call = sync_dirs(argv[2], argv[1]);
 
+    // Definimos variables que guardan los resultados
     long long weight_from_dir1_to_dir2 = data_first_call.weight_from_dir1_to_dir2 + data_second_call.weight_from_dir2_to_dir1;
     long long weight_from_dir2_to_dir1 = data_first_call.weight_from_dir2_to_dir1 + data_second_call.weight_from_dir1_to_dir2;
     int file_count_from_dir1_to_dir2 = data_first_call.file_count_from_dir1_to_dir2 + data_second_call.file_count_from_dir2_to_dir1;
     int file_count_from_dir2_to_dir1 = data_first_call.file_count_from_dir2_to_dir1 + data_second_call.file_count_from_dir1_to_dir2;
 
+    // Se imprimen los resultados
     printf("Sincronización completada. \n");
     printf("Se transfirieron %lld kb y %d archivos desde el primer directorio hacia el segundo directorio\n ", weight_from_dir1_to_dir2/1024, file_count_from_dir1_to_dir2);
     printf("Se transfirieron %lld kb y %d archivos desde el segundo directorio hacia el primer directorio\n ", weight_from_dir2_to_dir1/1024, file_count_from_dir2_to_dir1);
