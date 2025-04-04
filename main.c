@@ -101,25 +101,16 @@ struct dir_data cp_dir_to_dir(const char *src, const char *dest) {
 int same_content_file(const char *file1, const char *file2) {
     FILE *f1 = fopen(file1, "rb");
     FILE *f2 = fopen(file2, "rb");
-    // printf("Comparando %s y %s\n", file1, file2);
+
     if (!f1 || !f2) {
         perror("Error abriendo archivos para comparación");
         return 0;
     }
-
-    // printf("Abriendo %s y %s\n", file1, file2);
     
     int result = 1;
     char buf1[4096], buf2[4096];
-    // char buf3[4096], buf4[4096];
     size_t r1, r2;
-    // r3 = fread(buf3, 1, sizeof(buf3), f1);
-    // r4 = fread(buf4, 1, sizeof(buf4), f2);
-
-    // printf("%ld %ld %s %s \n", r3, r4, file1, file2);
-    // if (r3 != r4) {
-    //     result = 0;
-    // }
+ 
     r1 = fread(buf1, 1, sizeof(buf1), f1);
     r2 = fread(buf2, 1, sizeof(buf2), f2);
     if((r1 == 0 && r2 != 0) || (r1 != 0 && r2 == 0)) {
@@ -145,22 +136,10 @@ int same_content_file(const char *file1, const char *file2) {
         r1 = fread(buf1, 1, sizeof(buf1), f1);
         r2 = fread(buf2, 1, sizeof(buf2), f2);
     }
-
-    // while ((r1 = fread(buf1, 1, sizeof(buf1), f1)) > 0 && 
-    // (r2 = fread(buf2, 1, sizeof(buf2), f2)) > 0) {
-    //     printf("%ld %ld \n", r1, r2);
-    //     if (r1 != r2 || memcmp(buf1, buf2, r1) != 0) {
-    //         result = 0;
-    //         break;
-    //     }
-    // }
-    
-    // printf("Comparando 2 %s y %s\n", file1, file2);
     
     fclose(f1);
     fclose(f2);
 
-    // printf("%d \n", result);
     return result;
 }
 
@@ -297,7 +276,7 @@ struct sync_data sync_dirs(const char *d1, const char *d2) {
     return data;
 }
 
-// Función principal que recibe dos directorios como argumentos y sincroniza su contenido
+// Funcion main
 int main(int argc, char *argv[]) {
     if (argc != 3) {
         fprintf(stderr, "Uso: %s <directorio1> <directorio2>\n", argv[0]);
