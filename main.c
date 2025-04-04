@@ -351,13 +351,13 @@ struct sync_data sync_dirs(const char *d1, const char *d2) {
         // Verificamos que el archivo que esta en dir1 este en dir2
         if (stat(path1, &st1) == 0) {
             if (stat(path2, &st2) != 0) {
-                printf("%s no existe en %s. Desea copiarlo al directorio que no lo contiene o eliminarlo? (c/e): ", entry->d_name, d2);
+                printf("\033[1m%s\033[0m no existe en \033[1m%s\033[0m.\n", entry->d_name, d2);
+                printf("¿Desea copiar \033[1m%s\033[0m a \033[1m%s\033[0m o eliminarlo de \033[1m%s\033[0m? \033[1m(c,e)\033[0m: ", entry->d_name, d2, d1);
                 char resp;
                 scanf(" %c", &resp);
+                printf("\n");
                 // Si la respuesta es 'c' copiamos el archivo
                 if (resp == 'c') {
-                    
-                    printf("Copiando %lld a %s, %s\n", data.weight_from_dir1_to_dir2, d2, path1);
 
                     // Verificamos si es un archivo o un directorio
                     if (S_ISDIR(st1.st_mode)) {
@@ -385,9 +385,11 @@ struct sync_data sync_dirs(const char *d1, const char *d2) {
                 if (!S_ISDIR(st1.st_mode) && !S_ISDIR(st2.st_mode) && !same_content_file(path1, path2))  {
                     
                     if (difftime(st1.st_mtime, st2.st_mtime) > 0) {
-                        printf("%s fue modificado más recientemente que %s. Actualizar %s? (y/n): ", path1, path2, path2);
+                        printf("El archivo \033[1m%s\033[0m fue modificado más recientemente que \033[1m%s\033[0m.\n", path1, path2);
+                        printf("¿Desea actualizar \033[1m%s\033[0m? \033[1m(y/n)\033[0m: ", path2);
                         char resp;
                         scanf(" %c", &resp);
+                        printf("\n");
                         if (resp == 'y') {
 
                             data.weight_from_dir1_to_dir2 += st1.st_size;
@@ -425,6 +427,9 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Uso: %s <directorio1> <directorio2>\n", argv[0]);
         return EXIT_FAILURE;
     }
+
+    printf("\033[1mSincronizando directorios...\033[0m \n");
+    printf("\n");
     
     // Hacemos la sincronizacion de manera bidireccional
     struct sync_data data_first_call = sync_dirs(argv[1], argv[2]);
@@ -437,8 +442,9 @@ int main(int argc, char *argv[]) {
     int file_count_from_dir2_to_dir1 = data_first_call.file_count_from_dir2_to_dir1 + data_second_call.file_count_from_dir1_to_dir2;
 
     // Se imprimen los resultados
-    printf("Sincronización completada. \n");
-    printf("Se transfirieron %lld kb y %d archivos desde el primer directorio hacia el segundo directorio\n ", weight_from_dir1_to_dir2/1024, file_count_from_dir1_to_dir2);
-    printf("Se transfirieron %lld kb y %d archivos desde el segundo directorio hacia el primer directorio\n ", weight_from_dir2_to_dir1/1024, file_count_from_dir2_to_dir1);
+    printf("\n");
+    printf("\033[1mSincronización completada!\033[0m \n");
+    printf("Se transfirieron %lld KB y %d archivos desde \033[1m%s\033[0m hacia \033[1m%s\033[0m\n", weight_from_dir1_to_dir2/1024, file_count_from_dir1_to_dir2, argv[1], argv[2]);
+    printf("Se transfirieron %lld KB y %d archivos desde \033[1m%s\033[0m hacia \033[1m%s\033[0m\n", weight_from_dir2_to_dir1/1024, file_count_from_dir2_to_dir1, argv[2], argv[1]);
     return EXIT_SUCCESS;
 }
